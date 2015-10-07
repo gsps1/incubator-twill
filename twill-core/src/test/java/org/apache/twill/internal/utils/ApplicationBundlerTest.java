@@ -53,7 +53,7 @@ public class ApplicationBundlerTest {
 
     // Create a jar file with by tracing dependency
     ApplicationBundler bundler = new ApplicationBundler(ImmutableList.<String>of());
-    bundler.createBundle(location, ApplicationBundler.class);
+    bundler.createBundle(location, ApplicationBundler.class, false);
 
     File targetDir = tmpDir.newFolder();
     unjar(new File(location.toURI()), targetDir);

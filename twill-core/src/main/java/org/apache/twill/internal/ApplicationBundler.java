@@ -122,15 +122,16 @@ public final class ApplicationBundler {
     });
   }
 
-  public void createBundle(Location target, Iterable<Class<?>> classes) throws IOException {
-    createBundle(target, classes, ImmutableList.<URI>of());
+  public void createBundle(Location target, Iterable<Class<?>> classes, boolean skipTwillClasses) throws IOException {
+    createBundle(target, classes, ImmutableList.<URI>of(), skipTwillClasses);
   }
 
   /**
-   * Same as calling {@link #createBundle(Location, Iterable)}.
+   * Same as calling {@link #createBundle(Location, Iterable, boolean)}.
    */
-  public void createBundle(Location target, Class<?> clz, Class<?>...classes) throws IOException {
-    createBundle(target, ImmutableSet.<Class<?>>builder().add(clz).add(classes).build());
+  public void createBundle(Location target, Class<?> clz,
+                           boolean skipTwillClasses, Class<?>...classes) throws IOException {
+    createBundle(target, ImmutableSet.<Class<?>>builder().add(clz).add(classes).build(), skipTwillClasses);
   }
 
   /**
@@ -142,9 +143,11 @@ public final class ApplicationBundler {
    * @param resources Extra resources to put into the jar file. If resource is a jar file, it'll be put under
    *                  lib/ entry, otherwise under the resources/ entry.
    * @param classes Set of classes to start the dependency traversal.
+   * @param skipTwillClasses if true - twill classes will not be included the bundle
    * @throws IOException
    */
-  public void createBundle(Location target, Iterable<Class<?>> classes, Iterable<URI> resources) throws IOException {
+  public void createBundle(Location target, Iterable<Class<?>> classes, Iterable<URI> resources,
+                           boolean skipTwillClasses) throws IOException {
     LOG.debug("start creating bundle {}. building a temporary file locally at first", target.getName());
     // Write the jar to local tmp file first
     File tmpJar = File.createTempFile(target.getName(), ".tmp");
@@ -152,7 +155,7 @@ public final class ApplicationBundler {
       Set<String> entries = Sets.newHashSet();
       try (JarOutputStream jarOut = new JarOutputStream(new FileOutputStream(tmpJar))) {
         // Find class dependencies
-        findDependencies(classes, entries, jarOut, true);
+        findDependencies(classes, entries, jarOut, skipTwillClasses);
 
         // Add extra resources
         for (URI resource : resources) {

@@ -422,7 +422,8 @@ final class YarnTwillPreparer implements TwillPreparer {
       }
 
       Location location = createTempLocation(Constants.Files.PROGRAM_JAR);
-      bundler.createBundle(location, classes, resources);
+      // create the bundle, skip twill classes
+      bundler.createBundle(location, classes, resources, true);
       LOG.debug("Done {}", Constants.Files.PROGRAM_JAR);
 
       localFiles.put(Constants.Files.PROGRAM_JAR, createLocalFile(Constants.Files.PROGRAM_JAR, location));
