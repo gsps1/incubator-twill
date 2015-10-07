@@ -29,6 +29,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableTable;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
@@ -48,6 +49,7 @@ import org.apache.hadoop.security.Credentials;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
+import org.apache.twill.api.ClassAcceptor;
 import org.apache.twill.api.ResourceSpecification;
 import org.apache.twill.api.RunId;
 import org.apache.twill.api.SecureStore;
@@ -65,11 +67,14 @@ import org.apache.twill.common.Threads;
 import org.apache.twill.filesystem.HDFSLocationFactory;
 import org.apache.twill.filesystem.Location;
 import org.apache.twill.filesystem.LocationFactory;
+import org.apache.twill.internal.ApplicationBundler;
 import org.apache.twill.internal.Constants;
 import org.apache.twill.internal.ProcessController;
 import org.apache.twill.internal.RunIds;
 import org.apache.twill.internal.SingleRunnableApplication;
 import org.apache.twill.internal.appmaster.ApplicationMasterLiveNodeData;
+import org.apache.twill.internal.appmaster.ApplicationMasterMain;
+import org.apache.twill.internal.container.TwillContainerMain;
 import org.apache.twill.internal.yarn.VersionDetectYarnAppClientFactory;
 import org.apache.twill.internal.yarn.YarnAppClient;
 import org.apache.twill.internal.yarn.YarnApplicationReport;
@@ -92,7 +97,9 @@ import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -129,6 +136,8 @@ public final class YarnTwillRunnerService implements TwillRunnerService {
   private final ZKClientService zkClientService;
   private final LocationFactory locationFactory;
   private final Table<String, RunId, YarnTwillController> controllers;
+  private byte[] twillJarContent;
+
   // A Guava service to help the state transition.
   private final Service serviceDelegate;
   private ScheduledExecutorService secureStoreScheduler;
@@ -173,6 +182,16 @@ public final class YarnTwillRunnerService implements TwillRunnerService {
         YarnTwillRunnerService.this.shutDown();
       }
     };
+  }
+
+  public byte[] generateTwillJarContents() throws IOException {
+    ApplicationBundler applicationBundler = new ApplicationBundler(new ClassAcceptor());
+    List<Class<?>> classes = Lists.newArrayList();
+    classes.add(ApplicationMasterMain.class);
+    classes.add(TwillContainerMain.class);
+    // Stuck in the yarnAppClient class to make bundler being able to pickup the right yarn-client version
+    classes.add(yarnAppClient.getClass());
+    return applicationBundler.getBundleAsStream(classes, ImmutableList.<URI>of()).toByteArray();
   }
 
   @Override
@@ -292,7 +311,7 @@ public final class YarnTwillRunnerService implements TwillRunnerService {
         }
         return controller;
       }
-    });
+    }, twillJarContent);
   }
 
   @Override
@@ -319,6 +338,7 @@ public final class YarnTwillRunnerService implements TwillRunnerService {
   }
 
   private void startUp() throws Exception {
+    twillJarContent = generateTwillJarContents();
     yarnAppClient.startAndWait();
     zkClientService.startAndWait();
 

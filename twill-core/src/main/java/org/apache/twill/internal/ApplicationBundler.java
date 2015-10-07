@@ -152,7 +152,7 @@ public final class ApplicationBundler {
       Set<String> entries = Sets.newHashSet();
       try (JarOutputStream jarOut = new JarOutputStream(new FileOutputStream(tmpJar))) {
         // Find class dependencies
-        findDependencies(classes, entries, jarOut);
+        findDependencies(classes, entries, jarOut, true);
 
         // Add extra resources
         for (URI resource : resources) {
@@ -178,8 +178,42 @@ public final class ApplicationBundler {
     }
   }
 
+  /**
+   * Creates a {@link ByteArrayOutputStream} which includes all the given classes and
+   * all the classes that they depended on.
+   * The  {@link ByteArrayOutputStream}
+   * will also include all classes and resources under the packages as given as include packages
+   * in the constructor.
+   *
+   * @param resources Extra resources to put into the jar file. If resource is a jar file, it'll be put under
+   *                  lib/ entry, otherwise under the resources/ entry.
+   * @param classes Set of classes to start the dependency traversal.
+   * @return ByteArrayOutputStream
+   * @throws IOException
+   */
+  public ByteArrayOutputStream getBundleAsStream(Iterable<Class<?>> classes,
+                                                 Iterable<URI> resources) throws IOException {
+    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+    // Write the jar to local tmp file first
+    try {
+      Set<String> entries = Sets.newHashSet();
+      try (JarOutputStream jarOut = new JarOutputStream(byteArrayOutputStream)) {
+        // Find class dependencies, include twill classes
+        findDependencies(classes, entries, jarOut, false);
+
+        // Add extra resources
+        for (URI resource : resources) {
+          copyResource(resource, entries, jarOut);
+        }
+      }
+    } finally {
+      byteArrayOutputStream.close();
+    }
+    return byteArrayOutputStream;
+  }
+
   private void findDependencies(Iterable<Class<?>> classes, final Set<String> entries,
-                                final JarOutputStream jarOut) throws IOException {
+                                final JarOutputStream jarOut, final boolean skipTwill) throws IOException {
 
     Iterable<String> classNames = Iterables.transform(classes, new Function<Class<?>, String>() {
       @Override
@@ -198,6 +232,9 @@ public final class ApplicationBundler {
     Dependencies.findClassDependencies(classLoader, new ClassAcceptor() {
       @Override
       public boolean accept(String className, URL classUrl, URL classPathUrl) {
+        if (skipTwill && className.startsWith("org.apache.twill")) {
+          return false;
+        }
         if (bootstrapClassPaths.contains(classPathUrl.getFile())) {
           return false;
         }

@@ -62,6 +62,7 @@ public final class TwillLauncher {
     }
 
     File file = new File(args[0]);
+    File twillFile = new File(Constants.Files.TWILL_JAR);
     final File targetDir = createTempDir("twill.launcher");
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -72,6 +73,8 @@ public final class TwillLauncher {
       }
     });
 
+    System.out.println("UnJar " + twillFile + " to " + targetDir);
+    unJar(twillFile, targetDir);
     System.out.println("UnJar " + file + " to " + targetDir);
     unJar(file, targetDir);
 

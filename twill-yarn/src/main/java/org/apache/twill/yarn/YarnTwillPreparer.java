@@ -34,6 +34,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.io.ByteStreams;
+import com.google.common.io.Closeables;
 import com.google.common.io.OutputSupplier;
 import com.google.common.reflect.TypeToken;
 import com.google.gson.GsonBuilder;
@@ -117,6 +118,7 @@ final class YarnTwillPreparer implements TwillPreparer {
   private final LocationFactory locationFactory;
   private final YarnTwillControllerFactory controllerFactory;
   private final RunId runId;
+  private final byte[] twillJarContent;
 
   private final List<LogHandler> logHandlers = Lists.newArrayList();
   private final List<String> arguments = Lists.newArrayList();
@@ -137,7 +139,7 @@ final class YarnTwillPreparer implements TwillPreparer {
   YarnTwillPreparer(YarnConfiguration yarnConfig, TwillSpecification twillSpec,
                     YarnAppClient yarnAppClient, ZKClient zkClient,
                     LocationFactory locationFactory, String extraOptions, LogEntry.Level logLevel,
-                    YarnTwillControllerFactory controllerFactory) {
+                    YarnTwillControllerFactory controllerFactory, byte[] twillJarContent) {
     this.yarnConfig = yarnConfig;
     this.twillSpec = twillSpec;
     this.yarnAppClient = yarnAppClient;
@@ -151,6 +153,7 @@ final class YarnTwillPreparer implements TwillPreparer {
     this.user = System.getProperty("user.name");
     this.extraOptions = extraOptions;
     this.logLevel = logLevel;
+    this.twillJarContent = twillJarContent;
     this.classAcceptor = new ClassAcceptor();
   }
 
@@ -297,8 +300,8 @@ final class YarnTwillPreparer implements TwillPreparer {
           // Local files declared by runnables
           Multimap<String, LocalFile> runnableLocalFiles = HashMultimap.create();
 
-          createAppMasterJar(createBundler(), localFiles);
-          createContainerJar(createBundler(), localFiles);
+          createTwillJar(localFiles);
+          createProgramJar(createBundler(), localFiles);
           populateRunnableLocalFiles(twillSpec, runnableLocalFiles);
           saveSpecification(twillSpec, runnableLocalFiles, localFiles);
           saveLogback(localFiles);
@@ -307,14 +310,15 @@ final class YarnTwillPreparer implements TwillPreparer {
           saveArguments(new Arguments(arguments, runnableArgs), localFiles);
           saveLocalFiles(localFiles, ImmutableSet.of(Constants.Files.TWILL_SPEC,
                                                      Constants.Files.LOGBACK_TEMPLATE,
-                                                     Constants.Files.CONTAINER_JAR,
+                                                     Constants.Files.TWILL_JAR,
+                                                     Constants.Files.PROGRAM_JAR,
                                                      Constants.Files.LAUNCHER_JAR,
                                                      Constants.Files.ARGUMENTS));
 
           LOG.debug("Submit AM container spec: {}", appMasterInfo);
           // java -Djava.io.tmpdir=tmp -cp launcher.jar:$HADOOP_CONF_DIR -XmxMemory
           //     org.apache.twill.internal.TwillLauncher
-          //     appMaster.jar
+          //     program.jar
           //     org.apache.twill.internal.appmaster.ApplicationMasterMain
           //     false
           ImmutableMap.Builder<String, String> builder = ImmutableMap.<String, String>builder()
@@ -343,7 +347,7 @@ final class YarnTwillPreparer implements TwillPreparer {
               "-Xmx" + memory + "m",
               extraOptions == null ? "" : extraOptions,
               TwillLauncher.class.getName(),
-              Constants.Files.APP_MASTER_JAR,
+              Constants.Files.PROGRAM_JAR,
               ApplicationMasterMain.class.getName(),
               Boolean.FALSE.toString())
             .launch();
@@ -387,48 +391,41 @@ final class YarnTwillPreparer implements TwillPreparer {
     return new DefaultLocalFile(name, location.toURI(), location.lastModified(), location.length(), archive, null);
   }
 
-  private void createAppMasterJar(ApplicationBundler bundler, Map<String, LocalFile> localFiles) throws IOException {
+  private void createTwillJar(Map<String, LocalFile> localFiles) throws IOException {
+    LOG.debug("Copy Twill Classes to {}", Constants.Files.TWILL_JAR);
+    Location location = createTempLocation(Constants.Files.TWILL_JAR);
+    OutputStream os = new BufferedOutputStream(location.getOutputStream());
     try {
-      LOG.debug("Create and copy {}", Constants.Files.APP_MASTER_JAR);
-      Location location = createTempLocation(Constants.Files.APP_MASTER_JAR);
-
-      List<Class<?>> classes = Lists.newArrayList();
-      classes.add(ApplicationMasterMain.class);
-
-      // Stuck in the yarnAppClient class to make bundler being able to pickup the right yarn-client version
-      classes.add(yarnAppClient.getClass());
-
-      // Add the TwillRunnableEventHandler class
-      if (twillSpec.getEventHandler() != null) {
-        classes.add(getClassLoader().loadClass(twillSpec.getEventHandler().getClassName()));
-      }
-
-      bundler.createBundle(location, classes);
-      LOG.debug("Done {}", Constants.Files.APP_MASTER_JAR);
-
-      localFiles.put(Constants.Files.APP_MASTER_JAR, createLocalFile(Constants.Files.APP_MASTER_JAR, location));
-    } catch (ClassNotFoundException e) {
-      throw Throwables.propagate(e);
+      os.write(twillJarContent);
+    } finally {
+      Closeables.closeQuietly(os);
     }
+
+    LOG.debug("Done {}", Constants.Files.TWILL_JAR);
+    localFiles.put(Constants.Files.TWILL_JAR, createLocalFile(Constants.Files.TWILL_JAR, location));
   }
 
-  private void createContainerJar(ApplicationBundler bundler, Map<String, LocalFile> localFiles) throws IOException {
+  private void createProgramJar(ApplicationBundler bundler, Map<String, LocalFile> localFiles) throws IOException {
+    LOG.debug("Create and copy {}", Constants.Files.PROGRAM_JAR);
     try {
       Set<Class<?>> classes = Sets.newIdentityHashSet();
       classes.add(TwillContainerMain.class);
       classes.addAll(dependencies);
+
+      if (twillSpec.getEventHandler() != null) {
+        classes.add(getClassLoader().loadClass(twillSpec.getEventHandler().getClassName()));
+      }
 
       ClassLoader classLoader = getClassLoader();
       for (RuntimeSpecification spec : twillSpec.getRunnables().values()) {
         classes.add(classLoader.loadClass(spec.getRunnableSpecification().getClassName()));
       }
 
-      LOG.debug("Create and copy {}", Constants.Files.CONTAINER_JAR);
-      Location location = createTempLocation(Constants.Files.CONTAINER_JAR);
+      Location location = createTempLocation(Constants.Files.PROGRAM_JAR);
       bundler.createBundle(location, classes, resources);
-      LOG.debug("Done {}", Constants.Files.CONTAINER_JAR);
+      LOG.debug("Done {}", Constants.Files.PROGRAM_JAR);
 
-      localFiles.put(Constants.Files.CONTAINER_JAR, createLocalFile(Constants.Files.CONTAINER_JAR, location));
+      localFiles.put(Constants.Files.PROGRAM_JAR, createLocalFile(Constants.Files.PROGRAM_JAR, location));
 
     } catch (ClassNotFoundException e) {
       throw Throwables.propagate(e);

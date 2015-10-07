@@ -57,8 +57,8 @@ public final class Constants {
   public static final class Files {
 
     public static final String LAUNCHER_JAR = "launcher.jar";
-    public static final String APP_MASTER_JAR = "appMaster.jar";
-    public static final String CONTAINER_JAR = "container.jar";
+    public static final String TWILL_JAR = "twill.jar";
+    public static final String PROGRAM_JAR = "program.jar";
     public static final String LOCALIZE_FILES = "localizeFiles.json";
     public static final String TWILL_SPEC = "twillSpec.json";
     public static final String ARGUMENTS = "arguments.json";

@@ -139,7 +139,7 @@ public final class TwillContainerLauncher {
       commandBuilder.add(jvmOpts.getExtraOptions());
     }
     commandBuilder.add(TwillLauncher.class.getName(),
-                       Constants.Files.CONTAINER_JAR,
+                       Constants.Files.PROGRAM_JAR,
                        mainClass.getName(),
                        Boolean.TRUE.toString());
     List<String> command = commandBuilder.build();
