@@ -122,16 +122,15 @@ public final class ApplicationBundler {
     });
   }
 
-  public void createBundle(Location target, Iterable<Class<?>> classes, boolean skipTwillClasses) throws IOException {
-    createBundle(target, classes, ImmutableList.<URI>of(), skipTwillClasses);
+  public void createBundle(Location target, Iterable<Class<?>> classes) throws IOException {
+    createBundle(target, classes, ImmutableList.<URI>of());
   }
 
   /**
-   * Same as calling {@link #createBundle(Location, Iterable, boolean)}.
+   * Same as calling {@link #createBundle(Location, Iterable)}.
    */
-  public void createBundle(Location target, Class<?> clz,
-                           boolean skipTwillClasses, Class<?>...classes) throws IOException {
-    createBundle(target, ImmutableSet.<Class<?>>builder().add(clz).add(classes).build(), skipTwillClasses);
+  public void createBundle(Location target, Class<?> clz, Class<?>...classes) throws IOException {
+    createBundle(target, ImmutableSet.<Class<?>>builder().add(clz).add(classes).build());
   }
 
   /**
@@ -143,11 +142,9 @@ public final class ApplicationBundler {
    * @param resources Extra resources to put into the jar file. If resource is a jar file, it'll be put under
    *                  lib/ entry, otherwise under the resources/ entry.
    * @param classes Set of classes to start the dependency traversal.
-   * @param skipTwillClasses if true - twill classes will not be included the bundle
    * @throws IOException
    */
-  public void createBundle(Location target, Iterable<Class<?>> classes, Iterable<URI> resources,
-                           boolean skipTwillClasses) throws IOException {
+  public void createBundle(Location target, Iterable<Class<?>> classes, Iterable<URI> resources) throws IOException {
     LOG.debug("start creating bundle {}. building a temporary file locally at first", target.getName());
     // Write the jar to local tmp file first
     File tmpJar = File.createTempFile(target.getName(), ".tmp");
@@ -155,7 +152,7 @@ public final class ApplicationBundler {
       Set<String> entries = Sets.newHashSet();
       try (JarOutputStream jarOut = new JarOutputStream(new FileOutputStream(tmpJar))) {
         // Find class dependencies
-        findDependencies(classes, entries, jarOut, skipTwillClasses);
+        findDependencies(classes, entries, jarOut);
 
         // Add extra resources
         for (URI resource : resources) {
@@ -202,7 +199,7 @@ public final class ApplicationBundler {
       Set<String> entries = Sets.newHashSet();
       try (JarOutputStream jarOut = new JarOutputStream(byteArrayOutputStream)) {
         // Find class dependencies, include twill classes
-        findDependencies(classes, entries, jarOut, false);
+        findDependencies(classes, entries, jarOut);
 
         // Add extra resources
         for (URI resource : resources) {
@@ -216,7 +213,7 @@ public final class ApplicationBundler {
   }
 
   private void findDependencies(Iterable<Class<?>> classes, final Set<String> entries,
-                                final JarOutputStream jarOut, final boolean skipTwill) throws IOException {
+                                final JarOutputStream jarOut) throws IOException {
 
     Iterable<String> classNames = Iterables.transform(classes, new Function<Class<?>, String>() {
       @Override
@@ -235,9 +232,6 @@ public final class ApplicationBundler {
     Dependencies.findClassDependencies(classLoader, new ClassAcceptor() {
       @Override
       public boolean accept(String className, URL classUrl, URL classPathUrl) {
-        if (skipTwill && className.startsWith("org.apache.twill")) {
-          return false;
-        }
         if (bootstrapClassPaths.contains(classPathUrl.getFile())) {
           return false;
         }

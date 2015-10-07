@@ -154,7 +154,16 @@ final class YarnTwillPreparer implements TwillPreparer {
     this.extraOptions = extraOptions;
     this.logLevel = logLevel;
     this.twillJarContent = twillJarContent;
-    this.classAcceptor = new ClassAcceptor();
+
+    // class acceptor which skips twill classes
+    this.classAcceptor = new ClassAcceptor(){
+      @Override
+      public boolean accept(String className, URL classUrl, URL classPathUrl) {
+        if (className.startsWith("org.apache.twill")) {
+          return false;
+        }
+        return true;
+      }};
   }
 
   @Override
@@ -423,7 +432,7 @@ final class YarnTwillPreparer implements TwillPreparer {
 
       Location location = createTempLocation(Constants.Files.PROGRAM_JAR);
       // create the bundle, skip twill classes
-      bundler.createBundle(location, classes, resources, true);
+      bundler.createBundle(location, classes, resources);
       LOG.debug("Done {}", Constants.Files.PROGRAM_JAR);
 
       localFiles.put(Constants.Files.PROGRAM_JAR, createLocalFile(Constants.Files.PROGRAM_JAR, location));

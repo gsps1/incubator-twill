@@ -98,6 +98,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URL;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -185,6 +186,7 @@ public final class YarnTwillRunnerService implements TwillRunnerService {
   }
 
   public byte[] generateTwillJarContents() throws IOException {
+
     ApplicationBundler applicationBundler = new ApplicationBundler(new ClassAcceptor());
     List<Class<?>> classes = Lists.newArrayList();
     classes.add(ApplicationMasterMain.class);
