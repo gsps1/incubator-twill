@@ -64,6 +64,20 @@ public final class Dependencies {
   public static void findClassDependencies(ClassLoader classLoader,
                                            ClassAcceptor acceptor,
                                            Iterable<String> classesToResolve) throws IOException {
+    getClassDependencies(classLoader, acceptor, classesToResolve);
+  }
+
+  /**
+   * Finds the class dependencies of the given class.
+   * @param classLoader ClassLoader for finding class bytecode.
+   * @param acceptor Predicate to accept a found class and its bytecode.
+   * @param classesToResolve Classes for looking for dependencies.
+   * @throws IOException Thrown where there is error when loading in class bytecode.
+   * @return Set<String> Classes to resolve and their dependency classes
+   */
+  public static Set<String> getClassDependencies(ClassLoader classLoader,
+                                                 ClassAcceptor acceptor,
+                                                 Iterable<String> classesToResolve) throws IOException {
 
     final Set<String> seenClasses = Sets.newHashSet(classesToResolve);
     final Queue<String> classes = Lists.newLinkedList(classesToResolve);
@@ -94,6 +108,7 @@ public final class Dependencies {
         }), ClassReader.SKIP_DEBUG + ClassReader.SKIP_FRAMES);
       }
     }
+    return seenClasses;
   }
 
   /**

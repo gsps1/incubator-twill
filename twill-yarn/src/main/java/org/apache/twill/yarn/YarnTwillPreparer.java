@@ -118,7 +118,9 @@ final class YarnTwillPreparer implements TwillPreparer {
   private final LocationFactory locationFactory;
   private final YarnTwillControllerFactory controllerFactory;
   private final RunId runId;
-  private final byte[] twillJarContent;
+  private final Location twillJarLocation;
+  private final Set<String> twillDependencyClasses;
+  private final ClassAcceptor twillClassAcceptor;
 
   private final List<LogHandler> logHandlers = Lists.newArrayList();
   private final List<String> arguments = Lists.newArrayList();
@@ -139,7 +141,8 @@ final class YarnTwillPreparer implements TwillPreparer {
   YarnTwillPreparer(YarnConfiguration yarnConfig, TwillSpecification twillSpec,
                     YarnAppClient yarnAppClient, ZKClient zkClient,
                     LocationFactory locationFactory, String extraOptions, LogEntry.Level logLevel,
-                    YarnTwillControllerFactory controllerFactory, byte[] twillJarContent) {
+                    YarnTwillControllerFactory controllerFactory, Location twillJarLocation,
+                    final Set<String> twillDependencyClasses) {
     this.yarnConfig = yarnConfig;
     this.twillSpec = twillSpec;
     this.yarnAppClient = yarnAppClient;
@@ -153,17 +156,20 @@ final class YarnTwillPreparer implements TwillPreparer {
     this.user = System.getProperty("user.name");
     this.extraOptions = extraOptions;
     this.logLevel = logLevel;
-    this.twillJarContent = twillJarContent;
+    this.twillJarLocation = twillJarLocation;
+    this.twillDependencyClasses = twillDependencyClasses;
 
     // class acceptor which skips twill classes
-    this.classAcceptor = new ClassAcceptor(){
+    this.twillClassAcceptor = new ClassAcceptor(){
       @Override
       public boolean accept(String className, URL classUrl, URL classPathUrl) {
-        if (className.startsWith("org.apache.twill")) {
+        if (twillDependencyClasses.contains(className)) {
           return false;
         }
         return true;
       }};
+
+    this.classAcceptor = twillClassAcceptor;
   }
 
   @Override
@@ -274,8 +280,19 @@ final class YarnTwillPreparer implements TwillPreparer {
   }
 
   @Override
-  public TwillPreparer withBundlerClassAcceptor(ClassAcceptor classAcceptor) {
-    this.classAcceptor = classAcceptor;
+  public TwillPreparer withBundlerClassAcceptor(final ClassAcceptor classAcceptor) {
+    this.classAcceptor = new ClassAcceptor() {
+      @Override
+      public boolean accept(String className, URL classUrl, URL classPathUrl) {
+        if (!classAcceptor.accept(className, classUrl, classPathUrl)) {
+          return false;
+        }
+        if (!twillClassAcceptor.accept(className, classUrl, classPathUrl)) {
+          return false;
+        }
+        return true;
+      }
+    };
     return this;
   }
 
@@ -405,7 +422,7 @@ final class YarnTwillPreparer implements TwillPreparer {
     Location location = createTempLocation(Constants.Files.TWILL_JAR);
     OutputStream os = new BufferedOutputStream(location.getOutputStream());
     try {
-      os.write(twillJarContent);
+      ByteStreams.copy(twillJarLocation.getInputStream(), os);
     } finally {
       Closeables.closeQuietly(os);
     }

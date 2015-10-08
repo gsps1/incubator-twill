@@ -65,6 +65,7 @@ import org.apache.twill.api.logging.LogHandler;
 import org.apache.twill.common.Cancellable;
 import org.apache.twill.common.Threads;
 import org.apache.twill.filesystem.HDFSLocationFactory;
+import org.apache.twill.filesystem.LocalLocationFactory;
 import org.apache.twill.filesystem.Location;
 import org.apache.twill.filesystem.LocationFactory;
 import org.apache.twill.internal.ApplicationBundler;
@@ -75,6 +76,7 @@ import org.apache.twill.internal.SingleRunnableApplication;
 import org.apache.twill.internal.appmaster.ApplicationMasterLiveNodeData;
 import org.apache.twill.internal.appmaster.ApplicationMasterMain;
 import org.apache.twill.internal.container.TwillContainerMain;
+import org.apache.twill.internal.utils.Dependencies;
 import org.apache.twill.internal.yarn.VersionDetectYarnAppClientFactory;
 import org.apache.twill.internal.yarn.YarnAppClient;
 import org.apache.twill.internal.yarn.YarnApplicationReport;
@@ -96,9 +98,8 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URL;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -137,7 +138,8 @@ public final class YarnTwillRunnerService implements TwillRunnerService {
   private final ZKClientService zkClientService;
   private final LocationFactory locationFactory;
   private final Table<String, RunId, YarnTwillController> controllers;
-  private byte[] twillJarContent;
+  private Location twillJarLocation;
+  private Set<String> twillDependencyClasses;
 
   // A Guava service to help the state transition.
   private final Service serviceDelegate;
@@ -185,15 +187,34 @@ public final class YarnTwillRunnerService implements TwillRunnerService {
     };
   }
 
-  public byte[] generateTwillJarContents() throws IOException {
-
+  public Location createTwillJar() throws IOException {
     ApplicationBundler applicationBundler = new ApplicationBundler(new ClassAcceptor());
     List<Class<?>> classes = Lists.newArrayList();
     classes.add(ApplicationMasterMain.class);
     classes.add(TwillContainerMain.class);
     // Stuck in the yarnAppClient class to make bundler being able to pickup the right yarn-client version
     classes.add(yarnAppClient.getClass());
-    return applicationBundler.getBundleAsStream(classes, ImmutableList.<URI>of()).toByteArray();
+
+    twillDependencyClasses = getTwillDependencyClasses(classes);
+    File tempFile = File.createTempFile("twill", ".jar");
+    Location twillJar = new LocalLocationFactory().create(tempFile.toURI());
+    applicationBundler.createBundle(twillJar, classes);
+    return twillJar;
+  }
+
+  private Set<String> getTwillDependencyClasses(List<Class<?>> classes) throws IOException {
+    Iterable<String> classNames = Iterables.transform(classes, new Function<Class<?>, String>() {
+      @Override
+      public String apply(Class<?> input) {
+        return input.getName();
+      }
+    });
+
+    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+    if (classLoader == null) {
+      classLoader = getClass().getClassLoader();
+    }
+    return Dependencies.getClassDependencies(classLoader, new ClassAcceptor(), classNames);
   }
 
   @Override
@@ -313,7 +334,7 @@ public final class YarnTwillRunnerService implements TwillRunnerService {
         }
         return controller;
       }
-    }, twillJarContent);
+    }, twillJarLocation, twillDependencyClasses);
   }
 
   @Override
@@ -340,7 +361,7 @@ public final class YarnTwillRunnerService implements TwillRunnerService {
   }
 
   private void startUp() throws Exception {
-    twillJarContent = generateTwillJarContents();
+    twillJarLocation = createTwillJar();
     yarnAppClient.startAndWait();
     zkClientService.startAndWait();
 
@@ -368,6 +389,8 @@ public final class YarnTwillRunnerService implements TwillRunnerService {
   }
 
   private void shutDown() throws Exception {
+    // delete the twill jar
+    twillJarLocation.delete();
     // Shutdown shouldn't stop any controllers, as stopping this client service should let the remote containers
     // running. However, this assumes that this TwillRunnerService is a long running service and you only stop it
     // when the JVM process is about to exit. Hence it is important that threads created in the controllers are
