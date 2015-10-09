@@ -24,7 +24,9 @@ import com.google.common.collect.Multimaps;
 import com.google.common.collect.SetMultimap;
 import org.apache.twill.api.ResourceReport;
 import org.apache.twill.api.TwillRunResources;
+import org.apache.twill.api.logging.LogEntry;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -87,6 +89,22 @@ public final class DefaultResourceReport implements ResourceReport {
       }
     }
     usedResources.remove(runnableName, toRemove);
+  }
+
+  /**
+   * Replace the resource corresponding to the given runnable with updated log level.
+   *
+   * @param runnableName name of runnable.
+   * @param logLevel new log level
+   */
+  public void updateLogLevel(String runnableName, LogEntry.Level logLevel) {
+    if (usedResources.containsKey(runnableName)) {
+      List<TwillRunResources> updatedResources = new ArrayList<>();
+      for (TwillRunResources resources : usedResources.get(runnableName)) {
+        updatedResources.add(new DefaultTwillRunResources(resources, logLevel));
+      }
+      usedResources.replaceValues(runnableName, updatedResources);
+    }
   }
 
   /**

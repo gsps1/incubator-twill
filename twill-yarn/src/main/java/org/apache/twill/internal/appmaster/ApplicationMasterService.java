@@ -56,6 +56,7 @@ import org.apache.twill.api.RunId;
 import org.apache.twill.api.RuntimeSpecification;
 import org.apache.twill.api.TwillRunResources;
 import org.apache.twill.api.TwillSpecification;
+import org.apache.twill.api.logging.LogEntry;
 import org.apache.twill.common.Threads;
 import org.apache.twill.filesystem.Location;
 import org.apache.twill.internal.Configs;
@@ -303,6 +304,10 @@ public final class ApplicationMasterService extends AbstractYarnTwillService imp
     }
 
     if (handleSetInstances(message, completion)) {
+      return result;
+    }
+
+    if (handleSetLogLevel(message, completion)) {
       return result;
     }
 
@@ -740,6 +745,37 @@ public final class ApplicationMasterService extends AbstractYarnTwillService imp
     }
 
     instanceChangeExecutor.execute(createSetInstanceRunnable(message, completion, oldCount, newCount));
+    return true;
+  }
+
+  /**
+   * Attempts to change the log.level of runnable instances
+   * @return {@code true} if the message does requests for changes in log.level of a runnable,
+   *         {@code false} otherwise.
+   */
+  private boolean handleSetLogLevel(final Message message, final Runnable completion) {
+    if (message.getType() != Message.Type.SYSTEM || message.getScope() != Message.Scope.RUNNABLE) {
+      return false;
+    }
+
+    Command command = message.getCommand();
+    Map<String, String> options = command.getOptions();
+    if (!Constants.SystemMessages.LOG_LEVEL_CHANGE.equals(command.getCommand()) ||
+      !options.containsKey(Constants.SystemMessages.LEVEL)) {
+      return false;
+    }
+
+    final String runnableName = message.getRunnableName();
+    if (runnableName == null || runnableName.isEmpty() || !twillSpec.getRunnables().containsKey(runnableName)) {
+      LOG.info("Unknown runnable {}", runnableName);
+      return false;
+    }
+
+    final LogEntry.Level newLevel = LogEntry.Level.valueOf(options.get(Constants.SystemMessages.LEVEL));
+
+    LOG.info("Received change logLevel request for {}, to {}.", runnableName, newLevel);
+
+    runningContainers.sendToRunnable(message.getRunnableName(), message, completion);
     return true;
   }
 

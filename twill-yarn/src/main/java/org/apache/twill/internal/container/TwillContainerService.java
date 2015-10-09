@@ -17,6 +17,8 @@
  */
 package org.apache.twill.internal.container;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -28,12 +30,14 @@ import org.apache.twill.api.TwillRunnableSpecification;
 import org.apache.twill.common.Threads;
 import org.apache.twill.filesystem.Location;
 import org.apache.twill.internal.BasicTwillContext;
+import org.apache.twill.internal.Constants;
 import org.apache.twill.internal.ContainerInfo;
 import org.apache.twill.internal.ContainerLiveNodeData;
 import org.apache.twill.internal.state.Message;
 import org.apache.twill.internal.utils.Instances;
 import org.apache.twill.internal.yarn.AbstractYarnTwillService;
 import org.apache.twill.zookeeper.ZKClient;
+import org.slf4j.ILoggerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,6 +98,23 @@ public final class TwillContainerService extends AbstractYarnTwillService {
     if (message.getType() == Message.Type.SYSTEM
       && "instances".equals(command.getCommand()) && command.getOptions().containsKey("count")) {
       context.setInstanceCount(Integer.parseInt(command.getOptions().get("count")));
+    }
+
+    if (message.getType() == Message.Type.SYSTEM
+      && Constants.SystemMessages.LOG_LEVEL_CHANGE.equals(command.getCommand()) &&
+      command.getOptions().containsKey(Constants.SystemMessages.LEVEL)) {
+
+      ILoggerFactory loggerFactory = LoggerFactory.getILoggerFactory();
+      if (!(loggerFactory instanceof LoggerContext)) {
+        String msg = "LoggerFactory not an instance of LoggerContext, cannot change log level";
+        LOG.error(msg);
+        result.setException(new Exception(msg));
+        return result;
+      }
+
+      LoggerContext loggerContext = (LoggerContext) loggerFactory;
+      ch.qos.logback.classic.Logger rootLogger = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+      rootLogger.setLevel(Level.toLevel(command.getOptions().get(Constants.SystemMessages.LEVEL)));
     }
 
     commandExecutor.execute(new Runnable() {

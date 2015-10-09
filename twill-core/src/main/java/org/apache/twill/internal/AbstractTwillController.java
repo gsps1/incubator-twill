@@ -152,6 +152,11 @@ public abstract class AbstractTwillController extends AbstractZKServiceControlle
   }
 
   @Override
+  public ListenableFuture<LogEntry.Level> setRunnableLogLevel(String runnable, LogEntry.Level logLevel) {
+    return sendMessage(SystemMessages.setLogLevel(runnable, logLevel), logLevel);
+  }
+
+  @Override
   public ListenableFuture<String> restartInstances(final String runnable, int instanceId, int... moreInstanceIds) {
     Set<Integer> instanceIds = Sets.newLinkedHashSet();
     instanceIds.add(instanceId);

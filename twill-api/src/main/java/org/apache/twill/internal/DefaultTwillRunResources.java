@@ -43,6 +43,11 @@ public class DefaultTwillRunResources implements TwillRunResources {
     this.logLevel = logLevel;
   }
 
+  public DefaultTwillRunResources(TwillRunResources twillRunResources, Level logLevel) {
+    this(twillRunResources.getInstanceId(), twillRunResources.getContainerId(), twillRunResources.getVirtualCores(),
+         twillRunResources.getMemoryMB(), twillRunResources.getHost(), twillRunResources.getDebugPort(), logLevel);
+  }
+
   /**
    * @return instance id of the runnable.
    */

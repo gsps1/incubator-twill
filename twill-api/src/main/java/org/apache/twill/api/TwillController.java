@@ -17,6 +17,7 @@
  */
 package org.apache.twill.api;
 
+import org.apache.twill.api.logging.LogEntry;
 import org.apache.twill.api.logging.LogHandler;
 import org.apache.twill.discovery.Discoverable;
 import org.apache.twill.discovery.ServiceDiscovered;
@@ -79,6 +80,13 @@ public interface TwillController extends ServiceController {
    * @return A {@link Future} that will be completed when the restart operation has been done.
    */
   Future<Set<String>> restartInstances(Map<String, ? extends Set<Integer>> runnableToInstanceIds);
+
+  /**
+   * Set the log level of all runnable to the specified level.
+   * @param runnable name of the runnable
+   * @param logLevel target log level
+   */
+  Future<LogEntry.Level> setRunnableLogLevel(String runnable, LogEntry.Level logLevel);
 
   /**
    * Restart instances of some {@link TwillRunnable}.

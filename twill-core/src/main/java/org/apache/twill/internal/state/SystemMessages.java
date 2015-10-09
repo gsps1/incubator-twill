@@ -17,9 +17,10 @@
  */
 package org.apache.twill.internal.state;
 
-import org.apache.twill.api.Command;
-
 import com.google.common.base.Preconditions;
+import org.apache.twill.api.Command;
+import org.apache.twill.api.logging.LogEntry;
+import org.apache.twill.internal.Constants;
 
 /**
  * Collection of predefined system messages.
@@ -42,6 +43,13 @@ public final class SystemMessages {
     Preconditions.checkArgument(instances > 0, "Instances should be > 0.");
     return new SimpleMessage(Message.Type.SYSTEM, Message.Scope.RUNNABLE, runnableName,
                              Command.Builder.of("instances").addOption("count", Integer.toString(instances)).build());
+  }
+
+  public static Message setLogLevel(String runnableName, LogEntry.Level logLevel) {
+    Preconditions.checkNotNull(logLevel, "logLevel should not be null");
+    return new SimpleMessage(Message.Type.SYSTEM, Message.Scope.RUNNABLE, runnableName,
+                             Command.Builder.of(Constants.SystemMessages.LOG_LEVEL_CHANGE).
+                               addOption(Constants.SystemMessages.LEVEL, logLevel.name()).build());
   }
 
   /**

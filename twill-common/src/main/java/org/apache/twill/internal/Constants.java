@@ -78,6 +78,14 @@ public final class Constants {
     }
   }
 
+  /**
+   * Constants for logLevel system messages
+   */
+  public static final class SystemMessages {
+    public static final String LOG_LEVEL_CHANGE = "logLevelChange";
+    public static final String LEVEL = "level";
+  }
+
   private Constants() {
   }
 }

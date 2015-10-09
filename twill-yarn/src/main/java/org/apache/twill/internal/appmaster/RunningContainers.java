@@ -33,10 +33,12 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
 import org.apache.hadoop.yarn.api.records.ContainerState;
+import org.apache.twill.api.Command;
 import org.apache.twill.api.ResourceReport;
 import org.apache.twill.api.RunId;
 import org.apache.twill.api.TwillRunResources;
 import org.apache.twill.api.logging.LogEntry;
+import org.apache.twill.internal.Constants;
 import org.apache.twill.internal.ContainerExitCodes;
 import org.apache.twill.internal.ContainerInfo;
 import org.apache.twill.internal.ContainerLiveNodeData;
@@ -432,6 +434,13 @@ final class RunningContainers {
       @Override
       public void onSuccess(Message result) {
         if (count.decrementAndGet() == 0) {
+          // update log level if message is for log level change
+          Command command = message.getCommand();
+          if (Constants.SystemMessages.LOG_LEVEL_CHANGE.equals(command.getCommand()) &&
+            command.getOptions().containsKey(Constants.SystemMessages.LEVEL)) {
+            resourceReport.updateLogLevel(
+              runnableName, LogEntry.Level.valueOf(command.getOptions().get(Constants.SystemMessages.LEVEL)));
+          }
           completion.run();
         }
       }
