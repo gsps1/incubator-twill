@@ -145,41 +145,63 @@ public final class ApplicationBundler {
    * @throws IOException
    */
   public void createBundle(Location target, Iterable<Class<?>> classes, Iterable<URI> resources) throws IOException {
-    LOG.debug("start creating bundle {}. building a temporary file locally at first", target.getName());
+    createBundleAndGetClassPathUrls(target, classes, resources);
+  }
+
+  public Set<URL> createBundleAndGetClassPathUrls(Location target, Iterable<Class<?>> classes,
+                                                  Iterable<URI> resources) throws IOException {
+    return createBundleAndGetClassPathUrls(target.getName(), target.toString(),
+                                           target.getOutputStream(), classes, resources);
+  }
+
+  private Set<URL> createBundleAndGetClassPathUrls(String targetName, String targetPath,
+                                                   OutputStream targetOutputStream,
+                                                   Iterable<Class<?>> classes,
+                                                   Iterable<URI> resources) throws IOException {
+    LOG.debug("start creating bundle {}. building a temporary file locally at first", targetName);
     // Write the jar to local tmp file first
-    File tmpJar = File.createTempFile(target.getName(), ".tmp");
+    File tmpJar = File.createTempFile(targetName, ".tmp");
+    Set<URL> classPathUrls;
     try {
       Set<String> entries = Sets.newHashSet();
       try (JarOutputStream jarOut = new JarOutputStream(new FileOutputStream(tmpJar))) {
         // Find class dependencies
-        findDependencies(classes, entries, jarOut);
+        classPathUrls = findDependenciesAndGetClassPathUrls(classes, entries, jarOut);
 
         // Add extra resources
         for (URI resource : resources) {
           copyResource(resource, entries, jarOut);
         }
       }
-      LOG.debug("copying temporary bundle to destination {} ({} bytes)", target, tmpJar.length());
+      LOG.debug("copying temporary bundle to destination {} ({} bytes)", targetPath, tmpJar.length());
       // Copy the tmp jar into destination.
       try {
-        OutputStream os = new BufferedOutputStream(target.getOutputStream());
+        OutputStream os = new BufferedOutputStream(targetOutputStream);
         try {
           Files.copy(tmpJar, os);
         } finally {
           Closeables.closeQuietly(os);
         }
       } catch (IOException e) {
-        throw new IOException("failed to copy bundle from " + tmpJar.toURI() + " to " + target, e);
+        throw new IOException("failed to copy bundle from " + tmpJar.toURI() + " to " + targetPath, e);
       }
-      LOG.debug("finished creating bundle at {}", target);
+      LOG.debug("finished creating bundle at {}", targetPath);
     } finally {
       tmpJar.delete();
       LOG.debug("cleaned up local temporary for bundle {}", tmpJar.toURI());
     }
+    return classPathUrls;
+
   }
 
-  private void findDependencies(Iterable<Class<?>> classes, final Set<String> entries,
-                                final JarOutputStream jarOut) throws IOException {
+  public Set<URL> createBundleAndGetClassPathUrls(File target, Iterable<Class<?>> classes,
+                                                  Iterable<URI> resources) throws IOException {
+    return createBundleAndGetClassPathUrls(target.getName(), target.getPath(),
+                                    new FileOutputStream(target), classes, resources);
+  }
+
+  private Set<URL> findDependenciesAndGetClassPathUrls(Iterable<Class<?>> classes, final Set<String> entries,
+                                                       final JarOutputStream jarOut) throws IOException {
 
     Iterable<String> classNames = Iterables.transform(classes, new Function<Class<?>, String>() {
       @Override
@@ -210,6 +232,7 @@ public final class ApplicationBundler {
         return true;
       }
     }, classNames);
+    return seenClassPaths;
   }
 
   private void putEntry(String className, URL classUrl, URL classPathUrl, Set<String> entries, JarOutputStream jarOut) {

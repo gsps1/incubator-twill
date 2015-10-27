@@ -89,6 +89,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -97,6 +99,7 @@ import java.io.Writer;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -118,8 +121,7 @@ final class YarnTwillPreparer implements TwillPreparer {
   private final LocationFactory locationFactory;
   private final YarnTwillControllerFactory controllerFactory;
   private final RunId runId;
-  private final Location twillJarLocation;
-  private final Set<String> twillDependencyClasses;
+  private final File twillJarFile;
   private final ClassAcceptor twillClassAcceptor;
 
   private final List<LogHandler> logHandlers = Lists.newArrayList();
@@ -141,8 +143,8 @@ final class YarnTwillPreparer implements TwillPreparer {
   YarnTwillPreparer(YarnConfiguration yarnConfig, TwillSpecification twillSpec,
                     YarnAppClient yarnAppClient, ZKClient zkClient,
                     LocationFactory locationFactory, String extraOptions, LogEntry.Level logLevel,
-                    YarnTwillControllerFactory controllerFactory, Location twillJarLocation,
-                    final Set<String> twillDependencyClasses) {
+                    YarnTwillControllerFactory controllerFactory, File twillJarFile,
+                    final URLClassLoader twillClassLoader) {
     this.yarnConfig = yarnConfig;
     this.twillSpec = twillSpec;
     this.yarnAppClient = yarnAppClient;
@@ -156,17 +158,14 @@ final class YarnTwillPreparer implements TwillPreparer {
     this.user = System.getProperty("user.name");
     this.extraOptions = extraOptions;
     this.logLevel = logLevel;
-    this.twillJarLocation = twillJarLocation;
-    this.twillDependencyClasses = twillDependencyClasses;
+    this.twillJarFile = twillJarFile;
 
     // class acceptor which skips twill classes
     this.twillClassAcceptor = new ClassAcceptor(){
       @Override
       public boolean accept(String className, URL classUrl, URL classPathUrl) {
-        if (twillDependencyClasses.contains(className)) {
-          return false;
-        }
-        return true;
+        String resourceName = className.replace('.', '/') + ".class";
+        return (twillClassLoader.getResource(resourceName) == null);
       }};
 
     this.classAcceptor = twillClassAcceptor;
@@ -422,7 +421,7 @@ final class YarnTwillPreparer implements TwillPreparer {
     Location location = createTempLocation(Constants.Files.TWILL_JAR);
     OutputStream os = new BufferedOutputStream(location.getOutputStream());
     try {
-      ByteStreams.copy(twillJarLocation.getInputStream(), os);
+      ByteStreams.copy(new FileInputStream(twillJarFile), os);
     } finally {
       Closeables.closeQuietly(os);
     }

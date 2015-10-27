@@ -140,6 +140,7 @@ public class TwillTester extends ExternalResource {
    * Creates an unstarted instance of {@link org.apache.twill.api.TwillRunnerService}.
    */
   public TwillRunnerService createTwillRunnerService() throws IOException {
+    config.set("twill.jar.location", tmpFolder.newFolder().getAbsolutePath());
     YarnTwillRunnerService runner = new YarnTwillRunnerService(config, zkServer.getConnectionStr() + "/twill");
     // disable tests stealing focus
     runner.setJVMOptions("-Djava.awt.headless=true");

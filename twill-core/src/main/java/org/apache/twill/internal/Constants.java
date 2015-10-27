@@ -51,6 +51,10 @@ public final class Constants {
   public static final String RESTART_ALL_RUNNABLE_INSTANCES = "restartAllRunnableInstances";
   public static final String RESTART_RUNNABLES_INSTANCES = "restartRunnablesInstances";
 
+  /** Twill Jar location configuration name and the default value for that config */
+  public static final String TWILL_JAR_LOCATION = "twill.jar.location";
+  public static final String DEFAULT_TWILL_JAR_LOCATION = "/tmp/";
+
   /**
    * Constants for names of internal files that are shared between client, AM and containers.
    */
