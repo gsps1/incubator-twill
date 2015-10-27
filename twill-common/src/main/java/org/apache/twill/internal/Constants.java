@@ -56,6 +56,13 @@ public final class Constants {
   public static final String DEFAULT_TWILL_JAR_LOCATION = "/tmp/";
 
   /**
+   * Common ZK paths constants
+   */
+  public static final String DISCOVERY_PATH_PREFIX = "/discoverable";
+  public static final String INSTANCES_PATH_PREFIX = "/instances";
+
+
+  /**
    * Constants for names of internal files that are shared between client, AM and containers.
    */
   public static final class Files {
@@ -66,6 +73,7 @@ public final class Constants {
     public static final String LOCALIZE_FILES = "localizeFiles.json";
     public static final String TWILL_SPEC = "twillSpec.json";
     public static final String ARGUMENTS = "arguments.json";
+    public static final String ENVIRONMENTS = "environments.json";
     public static final String LOGBACK_TEMPLATE = "logback-template.xml";
     public static final String JVM_OPTIONS = "jvm.opts";
     public static final String CREDENTIALS = "credentials.store";
