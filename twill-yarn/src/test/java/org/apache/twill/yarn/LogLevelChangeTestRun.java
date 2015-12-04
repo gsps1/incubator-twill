@@ -18,6 +18,8 @@
 
 package org.apache.twill.yarn;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
 import com.google.common.base.Stopwatch;
 import org.apache.twill.api.AbstractTwillRunnable;
 import org.apache.twill.api.ResourceReport;
@@ -28,6 +30,7 @@ import org.apache.twill.api.TwillSpecification;
 import org.apache.twill.api.logging.LogEntry;
 import org.apache.twill.api.logging.PrinterLogHandler;
 import org.apache.twill.common.Threads;
+import org.apache.twill.internal.Constants;
 import org.junit.Assert;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -35,6 +38,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -84,6 +89,49 @@ public class LogLevelChangeTestRun extends BaseYarnTest {
         .build();
     }
 
+  }
+
+  @Test
+  public void testMultiThreadLogBack() throws Exception {
+    LOG.info("Object for Logger {}", LoggerFactory.getLogger(LogLevelChangeTestRun.class).hashCode());
+    ExecutorService executorService = Executors.newFixedThreadPool(5);
+    final CountDownLatch latch = new CountDownLatch(5);
+    final CountDownLatch changeLatch = new CountDownLatch(1);
+    final Object sync = new Object();
+
+    for (int i = 0; i < 5; i++) {
+      executorService.execute(new Runnable() {
+        @Override
+        public void run() {
+          synchronized (sync) {
+            if (changeLatch.getCount() == 1) {
+              LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+              ch.qos.logback.classic.Logger rootLogger = loggerContext.getLogger(LogLevelChangeTestRun.class);
+              System.out.println("Current rootLogger level is " + rootLogger.getLevel());
+              System.out.println("Setting rootLogger level to " + Level.INFO);
+              rootLogger.setLevel(Level.ERROR);
+              rootLogger.setLevel(Level.INFO);
+              changeLatch.countDown();
+            }
+          }
+          try {
+            changeLatch.await();
+          } catch (Exception e) {
+            e.printStackTrace();
+          }
+          LOG.info("Hashcode for Logger {}", LoggerFactory.getLogger(LogLevelChangeTestRun.class).hashCode());
+          LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+          ch.qos.logback.classic.Logger rootLogger = loggerContext.getLogger(LogLevelChangeTestRun.class);
+          System.out.println("Current rootLogger level is " + rootLogger.getLevel());
+          latch.countDown();
+        }
+      });
+    }
+
+    while (latch.getCount() != 0) {
+      TimeUnit.MILLISECONDS.sleep(200);
+    }
+    executorService.shutdown();
   }
 
   @Test

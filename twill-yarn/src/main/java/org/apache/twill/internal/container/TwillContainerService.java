@@ -17,7 +17,6 @@
  */
 package org.apache.twill.internal.container;
 
-import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Futures;
@@ -33,6 +32,8 @@ import org.apache.twill.internal.BasicTwillContext;
 import org.apache.twill.internal.Constants;
 import org.apache.twill.internal.ContainerInfo;
 import org.apache.twill.internal.ContainerLiveNodeData;
+import org.apache.twill.internal.EnvKeys;
+import org.apache.twill.internal.LoggerUtil;
 import org.apache.twill.internal.state.Message;
 import org.apache.twill.internal.utils.Instances;
 import org.apache.twill.internal.yarn.AbstractYarnTwillService;
@@ -112,9 +113,12 @@ public final class TwillContainerService extends AbstractYarnTwillService {
         return result;
       }
 
-      LoggerContext loggerContext = (LoggerContext) loggerFactory;
-      ch.qos.logback.classic.Logger rootLogger = loggerContext.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
-      rootLogger.setLevel(Level.toLevel(command.getOptions().get(Constants.SystemMessages.LEVEL)));
+      String logLevel = command.getOptions().get(Constants.SystemMessages.LEVEL);
+      LoggerUtil loggerUtil = new LoggerUtil(
+        System.getenv(EnvKeys.YARN_CONTAINER_HOST),
+        System.getenv(EnvKeys.TWILL_LOG_KAFKA_ZK),
+        System.getenv(EnvKeys.TWILL_RUNNABLE_NAME));
+      loggerUtil.configureLogger(logLevel);
     }
 
     commandExecutor.execute(new Runnable() {
